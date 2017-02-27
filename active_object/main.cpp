@@ -5,28 +5,35 @@
 #include <mutex>
 #include <condition_variable>
 #include <memory>
+#include <cassert>
 
-template <class T>
-struct SmartPointerTraits {
-    using UniquePtr = std::unique_ptr<T>;
-    using SharedPtr = std::shared_ptr<T>;
-    using WeakPtr = std::weak_ptr<T>;
-};
 
 template <class T>
 class ConcurrentQueue
-    : public std::enable_shared_from_this<ConcurrentQueue<T>>
-    , public SmartPointerTraits<ConcurrentQueue<T>> {
+    : public std::enable_shared_from_this<ConcurrentQueue<T>> {
 public:
     void push(T&& elem) {
-        std::lock_guard<std::mutex> guard(mutex);
-        queue.push(elem);
-        condition_variable.notify_all();
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            queue.push(elem);
+        }
+        condition_variable.notify_one();
     }
 
-    void clear() {
-        std::lock_guard<std::mutex> guard(mutex);
-        queue = std::queue<T>();
+    template <class CALLBACK>
+    void clear(CALLBACK callback) {
+        std::queue<T> old_queue;
+        {
+            std::lock_guard<std::mutex> guard(mutex);
+            std::swap(old_queue, queue);
+        }
+
+        while (!old_queue.empty()) {
+            auto elem = std::move(old_queue.front());
+            old_queue.pop();
+
+            callback(elem);
+        }
     }
 
     template <class CALLBACK>
@@ -119,9 +126,9 @@ public:
     }
 
     void cancel() {
-        // it is dangerous if there are sync operations in the queue
-        // we have to have mechanism to tell waiters about cancellation
-        queue->clear();
+        queue->clear([](const Message&){
+            // TODO: tell waiters about cancellation
+        });
     }
 
 private:
@@ -136,9 +143,9 @@ private:
     }
 
     template <class... Args>
-    static void task_processor(typename Queue::SharedPtr queue, Args&&... args) {
+    static void task_processor(std::shared_ptr<Queue> queue, Args&&... args) {
 
-        // need to provide user-defined creator function
+        // need to provide user-defined creating function
         O obj{ std::forward<Args>(args)... };
 
         bool need_to_stop = false;
@@ -154,8 +161,9 @@ private:
                         break;
                     }
                     default: {
+                        assert(false && "Unknown message type");
                         need_to_stop = true;
-                        // exception ???
+                        break;
                     }
                 }
             });
@@ -163,7 +171,7 @@ private:
     }
 
 private:
-    typename Queue::SharedPtr queue;
+    std::shared_ptr<Queue> queue;
     std::thread working_thread;
 };
 
