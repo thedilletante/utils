@@ -1,3 +1,6 @@
+#ifndef CPP_UTILS_ACTIVE_OBJECT_H
+#define CPP_UTILS_ACTIVE_OBJECT_H
+
 #include <iostream>
 #include <thread>
 #include <future>
@@ -8,9 +11,11 @@
 #include <cassert>
 
 
+namespace utils {
+
 template <class T>
 class ConcurrentQueue
-    : public std::enable_shared_from_this<ConcurrentQueue<T>> {
+        : public std::enable_shared_from_this<ConcurrentQueue<T>> {
 public:
     void push(T&& elem) {
         {
@@ -84,8 +89,8 @@ private:
 public:
     template <class... Args>
     ActiveObject(Args&&... args)
-        : queue { std::make_shared<Queue>() }
-        , working_thread { &ActiveObject::task_processor<Args...>, queue, std::forward<Args>(args)... }
+            : queue { std::make_shared<Queue>() }
+            , working_thread { &ActiveObject::task_processor<Args...>, queue, std::forward<Args>(args)... }
     {}
 
     ActiveObject(const ActiveObject&) = delete;
@@ -175,69 +180,7 @@ private:
     std::thread working_thread;
 };
 
+} // namespace utils
 
 
-
-
-class State {
-public:
-    // ctor
-
-    void f1() {
-        std::cout << std::this_thread::get_id() << " f1" << std::endl;
-    }
-
-    void f2(int i) {
-        std::cout << std::this_thread::get_id() << " f2 with " << i << std::endl;
-    }
-
-    int f3(int i) {
-        std::cout << std::this_thread::get_id() << " f3 with " << i << std::endl;
-        return 2;
-    }
-};
-
-class A{
-public:
-    char c;
-    A(char _c) : c(_c) {}
-
-    char getChar(char a, int i) {
-        std::cout << "invoced with " << a << " and " << i << std::endl;
-        return c;
-    }
-};
-
-int main() {
-
-    // I want a wrapper around State
-    // to execute State's methods at specific thread(s)
-    // I want an ability to execute them
-    // synchronously and asynchronously providing a callback
-    // to be invoked at the end
-
-    ActiveObject<State> a;
-    a.sync(&State::f1);
-    a.async([](){
-        std::cout << std::this_thread::get_id() << " async f1 finished" << std::endl;
-    }, &State::f1);
-
-    a.sync(&State::f2, 4);
-    a.async([](){
-        std::cout << std::this_thread::get_id() << " async f2 finished" << std::endl;
-    }, &State::f2, 5);
-
-    auto i = a.sync(&State::f3, 4);
-    a.async([](int i){
-        std::cout << std::this_thread::get_id() << " result" << i << std::endl;
-    }, &State::f3, 5);
-
-
-    ActiveObject<A> aa { 'i' };
-
-    aa.async([](char a){
-        std::cout << std::this_thread::get_id() << " result " << a << std::endl;
-    }, &A::getChar, 'd', 3);
-
-    return 0;
-}
+#endif //CPP_UTILS_ACTIVE_OBJECT_H
