@@ -101,29 +101,29 @@ public:
     Node* first = new (arena) Node { ArenaSize, nullptr };
 
     char* allocate(size_t size) {
-
         for (Node* iter = first, *prev = nullptr;
              iter != nullptr;
              prev = iter, iter = iter->next) {
 
-            if (iter->size == size || iter->size - size < sizeof(Node)) {
-                if (prev != nullptr) {
-                    prev->next = iter->next;
-                } else {
-                    first = iter->next;
-                }
-                iter->~Node();
-                return reinterpret_cast<char*>(iter);
-            } else if (iter->size - size >= sizeof(Node)) {
-                auto ret = reinterpret_cast<char *>(iter);
-                auto next = iter->next;
-                auto new_size = iter->size - size;
-                iter->~Node();
-                iter = new (ret + size) Node { new_size, next };
-                if (prev != nullptr) {
-                    prev->next = iter;
-                } else {
-                    first = iter;
+            if (iter->size >= size) {
+                if (iter->size == size || iter->size - size < sizeof(Node)) {
+                    if (prev != nullptr) {
+                        prev->next = iter->next;
+                    } else {
+                        first = iter->next;
+                    }
+                    return reinterpret_cast<char*>(iter);
+                } else if (iter->size - size >= sizeof(Node)) {
+                    auto ret = reinterpret_cast<char *>(iter);
+                    auto next = iter->next;
+                    auto new_size = iter->size - size;
+                    iter = new (ret + size) Node { new_size, next };
+                    if (prev != nullptr) {
+                        prev->next = iter;
+                    } else {
+                        first = iter;
+                    }
+                    return ret;
                 }
             }
         }
@@ -134,6 +134,7 @@ public:
     void deallocate(char* ptr, size_t size) {
         Node* iter = first;
         Node* prev = nullptr;
+        auto end = ptr + size;
 
         for (;
              iter != nullptr;
@@ -141,25 +142,26 @@ public:
             auto block = reinterpret_cast<char*>(iter);
             auto prev_block = reinterpret_cast<char*>(prev);
 
-            if (block > ptr) {
-                if (block - ptr < sizeof(Node)) {
+            if (block >= end) {
+                const auto right_diff = block - end;
+                if (right_diff < sizeof(Node)) {
                     if (prev != nullptr) {
-                        if (ptr - prev_block < sizeof(Node)) {
+                        const auto left_diff = ptr - (prev_block + prev->size);
+                        if (left_diff < sizeof(Node)) {
                             prev->next = iter->next;
-                            prev->size += iter->size + size + (ptr - prev_block) + (block - ptr);
+                            prev->size += iter->size + size + left_diff + right_diff;
                         } else {
-                            auto new_node = new (ptr) Node { iter->size + size + (block - ptr)};
-                            iter->~Node();
+                            auto new_node = new (ptr) Node { iter->size + size + right_diff};
                             prev->next = new_node;
                         }
                     } else {
-                        first = new (ptr) Node { iter->size + size + (block - ptr) };
-                        iter->~Node();
+                        first = new (ptr) Node { iter->size + size + right_diff, nullptr };
                     }
                 } else {
                     if (prev != nullptr) {
-                        if (ptr - prev_block < sizeof(Node)) {
-                            prev->size += size + (ptr - prev_block);
+                        const auto left_diff = ptr - (prev_block + prev->size);
+                        if (left_diff < sizeof(Node)) {
+                            prev->size += size + left_diff;
                         } else {
                             auto new_node = new (ptr) Node { size, prev->next };
                             prev->next = new_node;
@@ -196,51 +198,32 @@ void print(const char* str, const NodesInPlaceAllocator<N>& allocator) {
 
 
 int main() {
-    NodesInPlaceAllocator<1024> alloc;
+    NodesInPlaceAllocator<1024 * 10> alloc;
     print("init", alloc);
 
     auto ptr1 = alloc.allocate(8);
     print("allocated 8", alloc);
 
+    auto ptr2 = alloc.allocate(64);
+    print("allocated 64", alloc);
+
     alloc.deallocate(ptr1, 8);
     print("deallocated 8", alloc);
 
-//    auto ptr2 = alloc.allocate(64);
-//    print("allocated 64", alloc);
-//
-//    auto ptr3 = alloc.allocate(16);
-//    print("allocated 16", alloc);
+    auto ptr3 = alloc.allocate(16);
+    print("allocated 16", alloc);
 
+    auto ptr4 = alloc.allocate(8);
+    print("allocated 8", alloc);
 
+    alloc.deallocate(ptr2, 64);
+    print("deallocated 64", alloc);
 
+    alloc.deallocate(ptr3, 16);
+    print("deallocated 16", alloc);
 
-
-//    MyAllocator<1024> alloc;
-//    print("init", alloc);
-//
-//    auto ptr = alloc.allocate(8);
-//    print("allocated 8", alloc);
-//
-//    auto ptr1 = alloc.allocate(64);
-//    print("allocated 64", alloc);
-//
-//    alloc.deallocate(ptr, 8);
-//    print("deallocated 8", alloc);
-//
-//    auto ptr2 = alloc.allocate(16);
-//    print("allocated 16", alloc);
-//
-//    auto ptr3 = alloc.allocate(8);
-//    print("allocated 8", alloc);
-//
-//    alloc.deallocate(ptr1, 64);
-//    print("deallocated 64", alloc);
-//
-//    alloc.deallocate(ptr2, 16);
-//    print("deallocated 16", alloc);
-//
-//    alloc.deallocate(ptr3, 8);
-//    print("deallocated 8", alloc);
+    alloc.deallocate(ptr4, 8);
+    print("deallocated 8", alloc);
 
     return 0;
 }
