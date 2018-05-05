@@ -39,3 +39,12 @@ add_executable(${TEST_EXECUTABLE} ${TEST_SOURCES})
 target_link_libraries(${TEST_EXECUTABLE} gtest gtest_main)
 
 add_test(${TEST_EXECUTABLE} ${TEST_EXECUTABLE})
+
+add_executable(alloc
+    apps/alloc.cpp
+)
+
+add_executable(mutex
+    apps/mutex.cpp
+)
+target_link_libraries(mutex pthread)
