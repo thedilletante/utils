@@ -88,9 +88,17 @@ void print(const char* str, const MyAllocator<N>& allocator) {
     }
 }
 
+class Arena {
+public:
+    virtual ~Arena() = default;
+    virtual char* allocate(size_t size) = 0;
+    virtual void deallocate(char* ptr, size_t size) = 0;
+};
+
 
 template <size_t ArenaSize>
-struct NodesInPlaceAllocator {
+struct NodesInPlaceAllocator
+    : Arena {
 public:
     struct Node {
         size_t size;
@@ -100,7 +108,7 @@ public:
     char arena[ArenaSize];
     Node* first = new (arena) Node { ArenaSize, nullptr };
 
-    char* allocate(size_t size) {
+    char* allocate(size_t size) override {
         for (Node* iter = first, *prev = nullptr;
              iter != nullptr;
              prev = iter, iter = iter->next) {
@@ -131,7 +139,7 @@ public:
         return nullptr;
     }
 
-    void deallocate(char* ptr, size_t size) {
+    void deallocate(char* ptr, size_t size) override {
         Node* iter = first;
         Node* prev = nullptr;
         auto end = ptr + size;
@@ -197,33 +205,94 @@ void print(const char* str, const NodesInPlaceAllocator<N>& allocator) {
 }
 
 
+
+
+template <class Tp>
+struct SimpleAllocator {
+    using value_type = Tp;
+    using size_type = typename std::allocator<Tp>::size_type;
+    using difference_type = typename std::allocator<Tp>::difference_type;
+    using pointer = typename std::allocator<Tp>::pointer;
+    using const_pointer = typename std::allocator<Tp>::const_pointer;
+    // "reference" не входит Allocator Requirements,
+    // но libstdc++ думает что она всегда работает с std::allocator.
+    using reference = typename std::allocator<Tp>::reference;
+    using const_reference = typename std::allocator<Tp>::const_reference;
+    Arena& arena;
+
+    SimpleAllocator(Arena& arena)
+        : arena { arena } {}
+
+    template <class T>
+    SimpleAllocator(const SimpleAllocator<T>& other)
+        : arena { other.arena } {};
+
+    value_type * allocate(std::size_t n) {
+        return reinterpret_cast<value_type *>(arena.allocate(sizeof(Tp) * n));
+    }
+
+    void deallocate(Tp* p, std::size_t n) {
+        arena.deallocate(reinterpret_cast<char*>(p), sizeof(Tp) * n);
+    }
+
+    template<class U, class... Args> void construct(U* p, Args&&... args) { std::allocator<Tp>().construct(p, std::forward<Args>(args)...); }
+    template<class U> void destroy(U* p) { std::allocator<Tp>().destroy(p); }
+    template<class U> struct rebind { using other = SimpleAllocator<U>; };
+};
+
+template <class T, class U>
+bool operator==(const SimpleAllocator<T>& lhs, const SimpleAllocator<U>& rhs) {
+    return &lhs.arena == &rhs.arena;
+};
+
+template <class T, class U>
+bool operator!=(const SimpleAllocator<T>& lhs, const SimpleAllocator<U>& rhs) {
+    return !(lhs == rhs);
+};
+
 int main() {
-    NodesInPlaceAllocator<1024 * 10> alloc;
-    print("init", alloc);
+//    NodesInPlaceAllocator<1024 * 10> alloc;
+//    print("init", alloc);
+//
+//    auto ptr1 = alloc.allocate(8);
+//    print("allocated 8", alloc);
+//
+//    auto ptr2 = alloc.allocate(64);
+//    print("allocated 64", alloc);
+//
+//    alloc.deallocate(ptr1, 8);
+//    print("deallocated 8", alloc);
+//
+//    auto ptr3 = alloc.allocate(16);
+//    print("allocated 16", alloc);
+//
+//    auto ptr4 = alloc.allocate(8);
+//    print("allocated 8", alloc);
+//
+//    alloc.deallocate(ptr2, 64);
+//    print("deallocated 64", alloc);
+//
+//    alloc.deallocate(ptr3, 16);
+//    print("deallocated 16", alloc);
+//
+//    alloc.deallocate(ptr4, 8);
+//    print("deallocated 8", alloc);
 
-    auto ptr1 = alloc.allocate(8);
-    print("allocated 8", alloc);
+    NodesInPlaceAllocator<1024> arena;
+    print("inited", arena);
+    {
 
-    auto ptr2 = alloc.allocate(64);
-    print("allocated 64", alloc);
+        std::list<int, SimpleAllocator<int>> l{SimpleAllocator<int>(arena)};
 
-    alloc.deallocate(ptr1, 8);
-    print("deallocated 8", alloc);
-
-    auto ptr3 = alloc.allocate(16);
-    print("allocated 16", alloc);
-
-    auto ptr4 = alloc.allocate(8);
-    print("allocated 8", alloc);
-
-    alloc.deallocate(ptr2, 64);
-    print("deallocated 64", alloc);
-
-    alloc.deallocate(ptr3, 16);
-    print("deallocated 16", alloc);
-
-    alloc.deallocate(ptr4, 8);
-    print("deallocated 8", alloc);
-
+        print("list created", arena);
+        l.push_back(3);
+        l.push_back(5);
+        l.push_back(577);
+        l.erase(++l.begin());
+        l.push_back(6);
+        print("pushed 2 elements", arena);
+    }
+    print("list deallocated", arena);
+//
     return 0;
 }
