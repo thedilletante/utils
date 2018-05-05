@@ -88,33 +88,159 @@ void print(const char* str, const MyAllocator<N>& allocator) {
     }
 }
 
+
+template <size_t ArenaSize>
+struct NodesInPlaceAllocator {
+public:
+    struct Node {
+        size_t size;
+        Node* next;
+    };
+
+    char arena[ArenaSize];
+    Node* first = new (arena) Node { ArenaSize, nullptr };
+
+    char* allocate(size_t size) {
+
+        for (Node* iter = first, *prev = nullptr;
+             iter != nullptr;
+             prev = iter, iter = iter->next) {
+
+            if (iter->size == size || iter->size - size < sizeof(Node)) {
+                if (prev != nullptr) {
+                    prev->next = iter->next;
+                } else {
+                    first = iter->next;
+                }
+                iter->~Node();
+                return reinterpret_cast<char*>(iter);
+            } else if (iter->size - size >= sizeof(Node)) {
+                auto ret = reinterpret_cast<char *>(iter);
+                auto next = iter->next;
+                auto new_size = iter->size - size;
+                iter->~Node();
+                iter = new (ret + size) Node { new_size, next };
+                if (prev != nullptr) {
+                    prev->next = iter;
+                } else {
+                    first = iter;
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
+    void deallocate(char* ptr, size_t size) {
+        Node* iter = first;
+        Node* prev = nullptr;
+
+        for (;
+             iter != nullptr;
+             prev = iter, iter = iter->next) {
+            auto block = reinterpret_cast<char*>(iter);
+            auto prev_block = reinterpret_cast<char*>(prev);
+
+            if (block > ptr) {
+                if (block - ptr < sizeof(Node)) {
+                    if (prev != nullptr) {
+                        if (ptr - prev_block < sizeof(Node)) {
+                            prev->next = iter->next;
+                            prev->size += iter->size + size + (ptr - prev_block) + (block - ptr);
+                        } else {
+                            auto new_node = new (ptr) Node { iter->size + size + (block - ptr)};
+                            iter->~Node();
+                            prev->next = new_node;
+                        }
+                    } else {
+                        first = new (ptr) Node { iter->size + size + (block - ptr) };
+                        iter->~Node();
+                    }
+                } else {
+                    if (prev != nullptr) {
+                        if (ptr - prev_block < sizeof(Node)) {
+                            prev->size += size + (ptr - prev_block);
+                        } else {
+                            auto new_node = new (ptr) Node { size, prev->next };
+                            prev->next = new_node;
+                        }
+                    } else {
+                        first = new (ptr) Node { size, iter };
+                    }
+                }
+                return;
+            }
+        }
+
+        if (prev != nullptr) {
+            auto prev_block = reinterpret_cast<char*>(prev);
+            if (ptr - prev_block < sizeof(Node)) {
+                prev->size += ptr - prev_block + size;
+            } else {
+                auto node = new (ptr) Node { size, prev->next };
+                prev->next = node;
+            }
+        }
+
+        first = new (ptr) Node { size, nullptr };
+    }
+};
+
+template <size_t N>
+void print(const char* str, const NodesInPlaceAllocator<N>& allocator) {
+    std::cout << "==== allocator<" << N << ">, " << (void *)allocator.arena << " after: " << str << "\n";
+    for (auto iter = allocator.first; iter != nullptr; iter = iter->next) {
+        std::cout << " - node: " << (void *)iter << " of " << iter->size << " bytes\n";
+    }
+}
+
+
 int main() {
-    MyAllocator<1024> alloc;
+    NodesInPlaceAllocator<1024> alloc;
     print("init", alloc);
 
-    auto ptr = alloc.allocate(8);
+    auto ptr1 = alloc.allocate(8);
     print("allocated 8", alloc);
 
-    auto ptr1 = alloc.allocate(64);
-    print("allocated 64", alloc);
-
-    alloc.deallocate(ptr, 8);
+    alloc.deallocate(ptr1, 8);
     print("deallocated 8", alloc);
 
-    auto ptr2 = alloc.allocate(16);
-    print("allocated 16", alloc);
+//    auto ptr2 = alloc.allocate(64);
+//    print("allocated 64", alloc);
+//
+//    auto ptr3 = alloc.allocate(16);
+//    print("allocated 16", alloc);
 
-    auto ptr3 = alloc.allocate(8);
-    print("allocated 8", alloc);
 
-    alloc.deallocate(ptr1, 64);
-    print("deallocated 64", alloc);
 
-    alloc.deallocate(ptr2, 16);
-    print("deallocated 16", alloc);
 
-    alloc.deallocate(ptr3, 8);
-    print("deallocated 8", alloc);
+
+//    MyAllocator<1024> alloc;
+//    print("init", alloc);
+//
+//    auto ptr = alloc.allocate(8);
+//    print("allocated 8", alloc);
+//
+//    auto ptr1 = alloc.allocate(64);
+//    print("allocated 64", alloc);
+//
+//    alloc.deallocate(ptr, 8);
+//    print("deallocated 8", alloc);
+//
+//    auto ptr2 = alloc.allocate(16);
+//    print("allocated 16", alloc);
+//
+//    auto ptr3 = alloc.allocate(8);
+//    print("allocated 8", alloc);
+//
+//    alloc.deallocate(ptr1, 64);
+//    print("deallocated 64", alloc);
+//
+//    alloc.deallocate(ptr2, 16);
+//    print("deallocated 16", alloc);
+//
+//    alloc.deallocate(ptr3, 8);
+//    print("deallocated 8", alloc);
 
     return 0;
 }
