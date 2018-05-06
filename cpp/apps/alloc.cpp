@@ -39,21 +39,25 @@ public:
 
     char* allocate(size_t size) override {
         // we can allocate only fold of sizeof(Node) space
-        size = size + size % sizeof(Node);
-        for (Node* iter = head, *prev = nullptr;
-             iter != nullptr;
-             prev = iter, iter = iter->next) {
-
-            if (iter->size >= size) {
-                auto allocated_space = reinterpret_cast<char*>(iter);
-                auto new_node = iter->next;
-                const auto left = iter->size - size;
-                if (left >= sizeof(Node)) {
-                    new_node = new (allocated_space + size) Node { left, new_node };
-                }
-                (prev != nullptr ? prev->next : head) = new_node;
-                return allocated_space;
+        size = size + sizeof(Node) - size % sizeof(Node);
+        auto candidate = head;
+        auto best_candidate = head;
+        Node* prev_of_best = nullptr;
+        for (Node* prev = nullptr; candidate != nullptr; prev = candidate, candidate = candidate->next) {
+            if (candidate->size >= size && candidate->size < best_candidate->size) {
+                best_candidate = candidate;
+                prev_of_best = prev;
             }
+        }
+
+        if (best_candidate != nullptr) {
+            auto allocated_space = reinterpret_cast<char*>(best_candidate);
+            const auto left = best_candidate->size - size;
+            auto new_node = (left < sizeof(Node)) ?
+                            best_candidate->next :
+                            new (allocated_space + size) Node { left, best_candidate->next };
+            (prev_of_best != nullptr ? prev_of_best->next : head) = new_node;
+            return allocated_space;
         }
 
         return nullptr;
@@ -61,7 +65,7 @@ public:
 
     void deallocate(char* ptr, size_t size) override {
         // we can allocate only fold of sizeof(Node) space
-        size = size + size % sizeof(Node);
+        size = size + sizeof(Node) - size % sizeof(Node);
         Node* prev = nullptr;
         auto end = ptr + size;
 
@@ -120,9 +124,7 @@ private:
         const auto left_diff = block - end;
         if (left_diff < sizeof(Node)) {
           left->size += size + left_diff;
-          left->next = left->next->next; 
-        } else {
-          left->next = new (block) Node { size, left->next };
+          left->next = left->next ? left->next->next : nullptr;
         }
     }
 
@@ -202,33 +204,28 @@ private:
 };
 
 int main() {
-    DynamicPoolArena arena(1024 * 1024 * 1024);
+    DynamicPoolArena arena(1024);
     NodesInPlaceAllocator alloc(arena);
     print("init", alloc);
 
-    auto ptr1 = alloc.allocate(8);
-    print("allocated 8", alloc);
+    auto p1 = alloc.allocate(20);
+    auto p2 = alloc.allocate(1);
+    auto p3 = alloc.allocate(1);
+    auto p4 = alloc.allocate(1);
 
-    auto ptr2 = alloc.allocate(64);
-    print("allocated 64", alloc);
+    alloc.deallocate(p1, 20);
+    alloc.deallocate(p3, 1);
 
-    alloc.deallocate(ptr1, 8);
-    print("deallocated 8", alloc);
+    print("setup", alloc);
 
-    auto ptr3 = alloc.allocate(16);
-    print("allocated 16", alloc);
+    auto p5 = alloc.allocate(10);
+    print("allocated", alloc);
 
-    auto ptr4 = alloc.allocate(8);
-    print("allocated 8", alloc);
+    alloc.deallocate(p4, 1);
+    alloc.deallocate(p5, 1);
+    alloc.deallocate(p2, 1);
 
-    alloc.deallocate(ptr2, 64);
-    print("deallocated 64", alloc);
-
-    alloc.deallocate(ptr3, 16);
-    print("deallocated 16", alloc);
-
-    alloc.deallocate(ptr4, 8);
-    print("deallocated 8", alloc);
+    print("deallocated", alloc);
 
     return 0;
 }
