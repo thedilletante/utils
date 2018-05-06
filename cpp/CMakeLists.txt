@@ -7,23 +7,25 @@ set(DIR ${CMAKE_CURRENT_LIST_DIR})
 set(INCLUDE_DIR ${DIR}/include)
 set(SRC_DIR ${DIR}/src)
 
-# Append source files below
-
-set(HEADER_SOURCES
+set(SOURCES
+  ${INCLUDE_DIR}/active_object.h
+  ${INCLUDE_DIR}/merge_allocator.h
   ${INCLUDE_DIR}/zip.h
-  ${INCLUDE_DIR}/active_object.h)
+  ${SRC_DIR}/merge_allocator.cpp
+)
 
-# Append source files above
+add_library(${PROJECT_NAME}
+  ${SOURCES}
+)
 
-include_directories(${INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME}
+  PUBLIC
+    ${INCLUDE_DIR}
+)
 
 # TESTING
-
 set(TESTS_DIR ${DIR}/tests)
 set(GOOGLE_TEST_DIR ${DIR}/libs/googletest)
-
-include_directories(${GOOGLE_TEST_DIR}/googletest/include)
-include_directories(${GOOGLE_TEST_DIR}/googlemock/include)
 
 add_subdirectory(${GOOGLE_TEST_DIR}/googletest ${PROJECT_BINARY_DIR}/googletest)
 enable_testing()
@@ -31,18 +33,20 @@ enable_testing()
 set(TEST_SOURCES
   ${TESTS_DIR}/zip_test.cpp
   ${TESTS_DIR}/active_object_test.cpp
+  ${TESTS_DIR}/merge_allocator_test.cpp
 )
 
 set(TEST_EXECUTABLE ${PROJECT_NAME}_tests)
 
 add_executable(${TEST_EXECUTABLE} ${TEST_SOURCES})
-target_link_libraries(${TEST_EXECUTABLE} gtest gtest_main)
-
-add_test(${TEST_EXECUTABLE} ${TEST_EXECUTABLE})
-
-add_executable(alloc
-    apps/alloc.cpp
+target_include_directories(
+  ${TEST_EXECUTABLE}
+    PRIVATE
+      ${GOOGLE_TEST_DIR}/googletest/include
+      ${GOOGLE_TEST_DIR}/googlemock/include
 )
+target_link_libraries(${TEST_EXECUTABLE} gtest gtest_main ${PROJECT_NAME})
+add_test(${TEST_EXECUTABLE} ${TEST_EXECUTABLE})
 
 add_executable(mutex
     apps/mutex.cpp

@@ -38,7 +38,7 @@ TEST(ActiveObjectTest, testWithState) {
         everythingIsDone.set_value();
     }, &State::f2, 5);
 
-    a.sync(&State::f2, 4);
+//    a.sync(&State::f2, 4);
 
     everythingIsDone.get_future().wait();
 }
