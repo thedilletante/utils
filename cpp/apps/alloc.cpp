@@ -39,12 +39,15 @@ public:
 
     char* allocate(size_t size) override {
         // we can allocate only fold of sizeof(Node) space
-        size = size + sizeof(Node) - size % sizeof(Node);
+        const auto reminder = size % sizeof(Node);
+        if (reminder > 0) {
+            size += sizeof(Node) - reminder;
+        }
         auto candidate = head;
-        auto best_candidate = head;
+        Node* best_candidate = nullptr;
         Node* prev_of_best = nullptr;
         for (Node* prev = nullptr; candidate != nullptr; prev = candidate, candidate = candidate->next) {
-            if (candidate->size >= size && candidate->size < best_candidate->size) {
+            if (candidate->size >= size && (best_candidate == nullptr || candidate->size < best_candidate->size)) {
                 best_candidate = candidate;
                 prev_of_best = prev;
             }
@@ -65,7 +68,10 @@ public:
 
     void deallocate(char* ptr, size_t size) override {
         // we can allocate only fold of sizeof(Node) space
-        size = size + sizeof(Node) - size % sizeof(Node);
+        const auto reminder = size % sizeof(Node);
+        if (reminder > 0) {
+            size += sizeof(Node) - reminder;
+        }
         Node* prev = nullptr;
         auto end = ptr + size;
 
@@ -89,9 +95,10 @@ public:
         auto tail = prev;
         if (tail != nullptr) {
             mergeRight(tail, ptr, size);
+        } else {
+            head = new (ptr) Node { size, nullptr };
         }
 
-        head = new (ptr) Node { size, nullptr };
     }
 
     void print(const char* str) const {
@@ -206,26 +213,27 @@ private:
 int main() {
     DynamicPoolArena arena(1024);
     NodesInPlaceAllocator alloc(arena);
-    print("init", alloc);
+     print("init", alloc);
 
-    auto p1 = alloc.allocate(20);
-    auto p2 = alloc.allocate(1);
-    auto p3 = alloc.allocate(1);
-    auto p4 = alloc.allocate(1);
+     auto p1 = alloc.allocate(20);
+     auto p2 = alloc.allocate(1);
+     auto p3 = alloc.allocate(1);
+     auto p4 = alloc.allocate(1);
 
-    alloc.deallocate(p1, 20);
-    alloc.deallocate(p3, 1);
+     alloc.deallocate(p1, 20);
+     alloc.deallocate(p3, 1);
 
-    print("setup", alloc);
+     print("setup", alloc);
 
-    auto p5 = alloc.allocate(10);
-    print("allocated", alloc);
+     auto p5 = alloc.allocate(10);
+     print("allocated", alloc);
 
-    alloc.deallocate(p4, 1);
-    alloc.deallocate(p5, 1);
-    alloc.deallocate(p2, 1);
+     alloc.deallocate(p4, 1);
+     alloc.deallocate(p5, 1);
+     alloc.deallocate(p2, 1);
 
-    print("deallocated", alloc);
+     print("deallocated", alloc);
+
 
     return 0;
 }
