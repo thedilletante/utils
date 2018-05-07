@@ -29,7 +29,7 @@ private:
         size_t size;
         Node* next;
 
-        static Node* makeOn(char* place, size_t size, Node* next) noexcept;
+        static Node* makeOn(char* place, size_t size, Node* next = nullptr) noexcept;
     };
 
     static Node* mergeLeftAndReturnPrev(Node* right, char* block, size_t size) noexcept;

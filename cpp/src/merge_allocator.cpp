@@ -7,7 +7,7 @@
 
 MergeAllocator::MergeAllocator(ArenaHolder& holder) noexcept
     : holder { holder }
-    , head { Node::makeOn(holder.begin(), holder.size(), nullptr )}{
+    , head { Node::makeOn(holder.begin(), holder.size()) } {
     assert(holder.size() >= sizeof(Node));
 }
 
@@ -71,7 +71,7 @@ void MergeAllocator::deallocate(char* ptr, size_t size) noexcept {
     if (tail != nullptr) {
         mergeRight(tail, ptr, size);
     } else {
-        head = Node::makeOn(ptr, size, nullptr);
+        head = Node::makeOn(ptr, size);
     }
 
 }
