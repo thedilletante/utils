@@ -8,28 +8,24 @@
 template <size_t N>
 struct StaticArrayArena
     : public ArenaHolder {
-
-    char *begin() noexcept override {
-        return block;
-    }
-
-    size_t size() const noexcept override {
-        return N;
-    }
-
+    char *begin() noexcept override { return block; }
+    size_t size() const noexcept override { return N; }
     char block[N];
 };
 
-TEST(alloc, test) {
+TEST(merge_allocator, firstAllocateShouldReturnTheBeggining) {
     StaticArrayArena<16> arena;
     MergeAllocator allocator(arena);
 
-    auto ptr = allocator.allocate(1);
-    ASSERT_EQ(ptr, arena.begin());
+    ASSERT_EQ(allocator.allocate(1), arena.begin());
+}
 
-    allocator.deallocate(ptr, 1);
-    auto ptr1 = allocator.allocate(10);
-    ASSERT_EQ(ptr1, arena.begin());
+TEST(merge_allocator, allocateAfterDeallocateAfterAllocateShouldReturnTheSameMemory) {
+    StaticArrayArena<16> arena;
+    MergeAllocator allocator(arena);
 
-    ASSERT_EQ(nullptr, allocator.allocate(1));
+    auto theFirstAllocation = allocator.allocate(1);
+    allocator.deallocate(theFirstAllocation, 1);
+
+    ASSERT_EQ(allocator.allocate(1), theFirstAllocation);
 }

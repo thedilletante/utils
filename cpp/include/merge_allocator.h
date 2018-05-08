@@ -14,6 +14,8 @@ public:
     virtual size_t size() const noexcept = 0;
 };
 
+struct Node;
+
 class MergeAllocator {
 public:
     explicit MergeAllocator(ArenaHolder& holder) noexcept ;
@@ -23,17 +25,6 @@ public:
 
     char* allocate(size_t size) noexcept ;
     void deallocate(char* ptr, size_t size) noexcept ;
-
-private:
-    struct Node {
-        size_t size;
-        Node* next;
-
-        static Node* makeOn(char* place, size_t size, Node* next = nullptr) noexcept;
-    };
-
-    static Node* mergeLeftAndReturnPrev(Node* right, char* block, size_t size) noexcept;
-    static void mergeRight(Node* left, char* block, size_t size) noexcept;
 
 private:
     ArenaHolder& holder;
